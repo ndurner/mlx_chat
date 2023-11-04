@@ -1,0 +1,3 @@
+gradio
+langchain
+boto3
