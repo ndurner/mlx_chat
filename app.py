@@ -53,7 +53,7 @@ def process_values_js():
     }
     """
 
-def bot(message, history, aws_access, aws_secret, aws_token):
+def bot(message, history, aws_access, aws_secret, aws_token, temperature, max_tokens):
     try:
         prompt = "\n\n"
         for human, assi in history:
@@ -70,8 +70,8 @@ def bot(message, history, aws_access, aws_secret, aws_token):
 
         body = json.dumps({
             "prompt": prompt,
-            "max_tokens_to_sample": 300,
-            "temperature": 0,
+            "max_tokens_to_sample": max_tokens,
+            "temperature": temperature,
         })
 
         sess = boto3.Session(
@@ -102,14 +102,14 @@ with gr.Blocks() as demo:
         aws_access = gr.Textbox(label="AWS Access Key", elem_id="aws_access")
         aws_secret = gr.Textbox(label="AWS Secret Key", elem_id="aws_secret")
         aws_token = gr.Textbox(label="AWS Session Token", elem_id="aws_token")
-        system_prompt = gr.TextArea("You are a helpful AI.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
-        temp = gr.Slider(0, 1, label="Temperature", elem_id="temp")
+        temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
+        max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=4000)
         save_button = gr.Button("Save Settings")  
         load_button = gr.Button("Load Settings")  
 
         load_button.click(load_settings, js="""  
             () => {  
-                let elems = ['#aws_access textarea', '#aws_secret textarea', '#aws_token textarea', '#system_prompt textarea', '#temp input'];
+                let elems = ['#aws_access textarea', '#aws_secret textarea', '#aws_token textarea', '#temp input', '#max_tokens input'];
                 elems.forEach(elem => {
                     let item = document.querySelector(elem);
                     let event = new InputEvent('input', { bubbles: true });
@@ -119,13 +119,13 @@ with gr.Blocks() as demo:
             }  
         """)
 
-        save_button.click(save_settings, [aws_access, aws_secret, aws_token, system_prompt, temp], js="""  
-            (acc, sec, tok, prompt, temp) => {  
+        save_button.click(save_settings, [aws_access, aws_secret, aws_token, temp, max_tokens], js="""  
+            (acc, sec, tok, prompt, temp, ntok) => {  
                 localStorage.setItem('aws_access', acc);  
                 localStorage.setItem('aws_secret', sec);  
                 localStorage.setItem('aws_token', tok);  
-                localStorage.setItem('system_prompt', prompt);  
-                localStorage.setItem('temp', temp);  
+                localStorage.setItem('temp', document.querySelector('#temp input').value);  
+                localStorage.setItem('max_tokens', document.querySelector('#max_tokens input').value);  
             }  
         """) 
 
@@ -146,7 +146,7 @@ with gr.Blocks() as demo:
         )
         submit_btn = gr.Button("🚀 Send", scale=0)
         submit_click = submit_btn.click(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-            bot, [txt, chatbot, aws_access, aws_secret, aws_token], [txt, chatbot],
+            bot, [txt, chatbot, aws_access, aws_secret, aws_token, temp, max_tokens], [txt, chatbot],
         )
         submit_click.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
 
@@ -164,7 +164,7 @@ with gr.Blocks() as demo:
             dmp_btn.click(dump, inputs=[chatbot], outputs=[txt_dmp])
 
     txt_msg = txt.submit(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-        bot, [txt, chatbot, aws_access, aws_secret, aws_token], [txt, chatbot],
+        bot, [txt, chatbot, aws_access, aws_secret, aws_token, temp, max_tokens], [txt, chatbot],
     )
     txt_msg.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
     file_msg = btn.upload(add_file, [chatbot, btn], [chatbot], queue=False, postprocess=False)
