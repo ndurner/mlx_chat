@@ -1,3 +1,2 @@
 gradio
-langchain
-boto3
+openai

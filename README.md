@@ -1,10 +1,10 @@
 ---
-title: Amz Bedrock Chat
+title: OAI Chat
 emoji: 📈
 colorFrom: yellow
 colorTo: gray
 sdk: gradio
-sdk_version: 4.1.1
+sdk_version: 4.2.0
 app_file: app.py
 pinned: false
 license: mit

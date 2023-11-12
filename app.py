@@ -1,7 +1,7 @@
 import gradio as gr
 import json
 import os
-import boto3
+import openai
 
 dump_controls = False
 log_to_console = False
@@ -42,51 +42,51 @@ def load_settings():
     # Dummy Python function, actual loading is done in JS  
     pass  
 
-def save_settings(acc, sec, prompt, temp):  
+def save_settings(acc, sec, prompt, temp, tokens, model):  
     # Dummy Python function, actual saving is done in JS  
     pass  
 
 def process_values_js():
     return """
     () => {
-        return ["access_key", "secret_key", "token"];
+        return ["oai_key", "system_prompt", "seed"];
     }
     """
 
-def bot(message, history, aws_access, aws_secret, aws_token, temperature, max_tokens):
+def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens, model):
     try:
-        prompt = "\n\n"
+        openai.api_key = oai_key
+
+        seed_i = None
+        if seed:
+            seed_i = int(seed)
+
+        history_openai_format = []
+        if system_prompt:
+                history_openai_format.append({"role": "system", "content": system_prompt})
         for human, assi in history:
-            if prompt is not None:
-                prompt += f"Human: {human}\n\n"
+            if human is not None:
+                history_openai_format.append({"role": "user", "content": human})
             if assi is not None:
-                prompt += f"Assistant: {assi}\n\n"
+                history_openai_format.append({"role": "assistant", "content": assi})
         if message:
-            prompt += f"Human: {message}\n\n"
-        prompt += f"Assistant:"
+            history_openai_format.append({"role": "user", "content": message})
 
         if log_to_console:
-            print(f"br_prompt: {str(prompt)}")
+            print(f"br_prompt: {str(history_openai_format)}")
 
-        body = json.dumps({
-            "prompt": prompt,
-            "max_tokens_to_sample": max_tokens,
-            "temperature": temperature,
-        })
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages= history_openai_format,
+            temperature=temperature,
+            seed=seed_i,
+            max_tokens=max_tokens
+        )
 
-        sess = boto3.Session(
-            aws_access_key_id=aws_access,
-            aws_secret_access_key=aws_secret,
-            aws_session_token=aws_token,
-            region_name='eu-central-1')
-        br = sess.client(service_name="bedrock-runtime")
+        if log_to_console:
+            print(f"br_response: {str(response)}")
 
-        response = br.invoke_model(body=body, modelId="anthropic.claude-v2",
-                                accept="application/json", contentType="application/json")
-        response_body = json.loads(response.get('body').read())
-        br_result = response_body.get('completion')
-
-        history[-1][1] = br_result
+        history[-1][1] = response.choices[0].message.content
         if log_to_console:
             print(f"br_result: {str(history)}")
 
@@ -96,12 +96,14 @@ def bot(message, history, aws_access, aws_secret, aws_token, temperature, max_to
     return "", history
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Amazon™️ Bedrock™️ Chat™️ (Nils' Version™️) feat. Anthropic™️ Claude-2™️")
+    gr.Markdown("# OAI Chat (Nils' Version™️)")
 
     with gr.Accordion("Settings"):
-        aws_access = gr.Textbox(label="AWS Access Key", elem_id="aws_access")
-        aws_secret = gr.Textbox(label="AWS Secret Key", elem_id="aws_secret")
-        aws_token = gr.Textbox(label="AWS Session Token", elem_id="aws_token")
+        oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
+        model = gr.Dropdown(label="Model", value="gpt-4-1106-preview", allow_custom_value=True, elem_id="model",
+                            choices=["gpt-4-1106-preview", "gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106"])
+        system_prompt = gr.TextArea("You are a helpful AI.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
+        seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
         max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=4000)
         save_button = gr.Button("Save Settings")  
@@ -109,7 +111,7 @@ with gr.Blocks() as demo:
 
         load_button.click(load_settings, js="""  
             () => {  
-                let elems = ['#aws_access textarea', '#aws_secret textarea', '#aws_token textarea', '#temp input', '#max_tokens input'];
+                let elems = ['#oai_key textarea', '#system_prompt textarea', '#seed textarea', '#temp input', '#max_tokens input', '#model'];
                 elems.forEach(elem => {
                     let item = document.querySelector(elem);
                     let event = new InputEvent('input', { bubbles: true });
@@ -119,13 +121,14 @@ with gr.Blocks() as demo:
             }  
         """)
 
-        save_button.click(save_settings, [aws_access, aws_secret, aws_token, temp, max_tokens], js="""  
-            (acc, sec, tok, prompt, temp, ntok) => {  
-                localStorage.setItem('aws_access', acc);  
-                localStorage.setItem('aws_secret', sec);  
-                localStorage.setItem('aws_token', tok);  
+        save_button.click(save_settings, [oai_key, system_prompt, seed, temp, max_tokens, model], js="""  
+            (oai, sys, seed, temp, ntok, model) => {  
+                localStorage.setItem('oai_key', oai);  
+                localStorage.setItem('system_prompt', sys);  
+                localStorage.setItem('seed', seed);  
                 localStorage.setItem('temp', document.querySelector('#temp input').value);  
                 localStorage.setItem('max_tokens', document.querySelector('#max_tokens input').value);  
+                localStorage.setItem('model', model);  
             }  
         """) 
 
@@ -146,7 +149,7 @@ with gr.Blocks() as demo:
         )
         submit_btn = gr.Button("🚀 Send", scale=0)
         submit_click = submit_btn.click(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-            bot, [txt, chatbot, aws_access, aws_secret, aws_token, temp, max_tokens], [txt, chatbot],
+            bot, [txt, chatbot, oai_key, system_prompt, seed, temp, max_tokens, model], [txt, chatbot],
         )
         submit_click.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
 
@@ -164,7 +167,7 @@ with gr.Blocks() as demo:
             dmp_btn.click(dump, inputs=[chatbot], outputs=[txt_dmp])
 
     txt_msg = txt.submit(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-        bot, [txt, chatbot, aws_access, aws_secret, aws_token, temp, max_tokens], [txt, chatbot],
+        bot, [txt, chatbot, oai_key, system_prompt, seed, temp, max_tokens, model], [txt, chatbot],
     )
     txt_msg.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
     file_msg = btn.upload(add_file, [chatbot, btn], [chatbot], queue=False, postprocess=False)
