@@ -202,6 +202,14 @@ with gr.Blocks() as demo:
     )
 
     with gr.Row():
+        btn = gr.UploadButton("📁 Upload", size="sm")
+        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_types=["image"])
+        undo_btn = gr.Button("↩️ Undo")
+        undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
+
+        clear = gr.ClearButton(chatbot, value="🗑️ Clear")
+
+    with gr.Row():
         txt = gr.TextArea(
             scale=4,
             show_label=False,
@@ -214,14 +222,6 @@ with gr.Blocks() as demo:
             bot, [txt, chatbot, oai_key, system_prompt, seed, temp, max_tokens, model], [txt, chatbot],
         )
         submit_click.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
-
-    with gr.Row():
-        btn = gr.UploadButton("📁 Upload", size="sm")
-        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_types=["image"])
-        undo_btn = gr.Button("↩️ Undo")
-        undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
-
-        clear = gr.ClearButton(chatbot, value="🗑️ Clear")
 
     if dump_controls:
         with gr.Row():
