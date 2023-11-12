@@ -167,7 +167,7 @@ with gr.Blocks() as demo:
         system_prompt = gr.TextArea("You are a helpful AI.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
-        max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=4000)
+        max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=800)
         save_button = gr.Button("Save Settings")  
         load_button = gr.Button("Load Settings")  
 
