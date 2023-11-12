@@ -1,16 +1,50 @@
 import gradio as gr
-import json
+import base64
 import os
 import openai
 
 dump_controls = False
 log_to_console = False
 
+# constants
+image_embed_prefix = "🖼️🆙 "
+
+def encode_image(image_data):
+    """Generates a prefix for image base64 data in the required format for the
+    four known image formats: png, jpeg, gif, and webp.
+
+    Args:
+    image_data: The image data, encoded in base64.
+
+    Returns:
+    A string containing the prefix.
+    """
+
+    # Get the first few bytes of the image data.
+    magic_number = image_data[:4]
+  
+    # Check the magic number to determine the image type.
+    if magic_number.startswith(b'\x89PNG'):
+        image_type = 'png'
+    elif magic_number.startswith(b'\xFF\xD8'):
+        image_type = 'jpeg'
+    elif magic_number.startswith(b'GIF89a'):
+        image_type = 'gif'
+    elif magic_number.startswith(b'RIFF'):
+        if image_data[8:12] == b'WEBP':
+            image_type = 'webp'
+        else:
+            # Unknown image type.
+            raise Exception("Unknown image type")
+    else:
+        # Unknown image type.
+        raise Exception("Unknown image type")
+
+    return f"data:image/{image_type};base64,{base64.b64encode(image_data).decode('utf-8')}"
 
 def add_text(history, text):
     history = history + [(text, None)]
     return history, gr.Textbox(value="", interactive=False)
-
 
 def add_file(history, file):
     with open(file.name, mode="rb") as f:
@@ -25,6 +59,15 @@ def add_file(history, file):
     history = history + [(f'```{fn}\n{content}\n```', None)]
 
     gr.Info(f"File added as {fn}")
+
+    return history
+
+def add_img(history, file):
+    if log_to_console:
+        print(f"add_img {file.name}")
+    history = history + [(image_embed_prefix + file.name, None)]
+
+    gr.Info(f"Image added as {file.name}")
 
     return history
 
@@ -61,16 +104,35 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
         if seed:
             seed_i = int(seed)
 
+        if log_to_console:
+            print(f"bot history: {str(history)}")
+
         history_openai_format = []
+        user_msg_parts = []
         if system_prompt:
                 history_openai_format.append({"role": "system", "content": system_prompt})
         for human, assi in history:
             if human is not None:
-                history_openai_format.append({"role": "user", "content": human})
+                if human.startswith(image_embed_prefix):
+                    with open(human.lstrip(image_embed_prefix), mode="rb") as f:
+                        content = f.read()
+                    user_msg_parts.append({"type": "image_url",
+                                           "image_url":{"url": encode_image(content)}})
+                else:
+                    user_msg_parts.append({"type": "text", "text": human})
+
             if assi is not None:
+                if user_msg_parts:
+                    history_openai_format.append({"role": "user", "content": user_msg_parts})
+                    user_msg_parts = []
+
                 history_openai_format.append({"role": "assistant", "content": assi})
+
         if message:
-            history_openai_format.append({"role": "user", "content": message})
+            user_msg_parts.append({"type": "text", "text": human})
+        
+        if user_msg_parts:
+            history_openai_format.append({"role": "user", "content": user_msg_parts})
 
         if log_to_console:
             print(f"br_prompt: {str(history_openai_format)}")
@@ -101,7 +163,7 @@ with gr.Blocks() as demo:
     with gr.Accordion("Settings"):
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-1106-preview", allow_custom_value=True, elem_id="model",
-                            choices=["gpt-4-1106-preview", "gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106"])
+                            choices=["gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106"])
         system_prompt = gr.TextArea("You are a helpful AI.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
@@ -155,6 +217,7 @@ with gr.Blocks() as demo:
 
     with gr.Row():
         btn = gr.UploadButton("📁 Upload", size="sm")
+        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_types=["image"])
         undo_btn = gr.Button("↩️ Undo")
         undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
 
@@ -171,5 +234,6 @@ with gr.Blocks() as demo:
     )
     txt_msg.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
     file_msg = btn.upload(add_file, [chatbot, btn], [chatbot], queue=False, postprocess=False)
+    img_msg = img_btn.upload(add_img, [chatbot, img_btn], [chatbot], queue=False, postprocess=False)
 
 demo.queue().launch()
