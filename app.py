@@ -1,7 +1,7 @@
 import gradio as gr
 import base64
 import os
-import openai
+from openai import OpenAI
 
 dump_controls = False
 log_to_console = False
@@ -98,7 +98,9 @@ def process_values_js():
 
 def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens, model):
     try:
-        openai.api_key = oai_key
+        client = OpenAI(
+            api_key=oai_key
+        )
 
         seed_i = None
         if seed:
@@ -137,7 +139,7 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
         if log_to_console:
             print(f"br_prompt: {str(history_openai_format)}")
 
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model,
             messages= history_openai_format,
             temperature=temperature,
