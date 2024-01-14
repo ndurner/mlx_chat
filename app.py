@@ -4,6 +4,8 @@ import os
 from openai import OpenAI
 import json
 
+from doc2json import process_docx
+
 dump_controls = False
 log_to_console = False
 
@@ -48,13 +50,16 @@ def add_text(history, text):
     return history, gr.Textbox(value="", interactive=False)
 
 def add_file(history, file):
-    with open(file.name, mode="rb") as f:
-        content = f.read()
+    if file.name.endswith(".docx"):
+        content = process_docx(file.name)
+    else:
+        with open(file.name, mode="rb") as f:
+            content = f.read()
 
-        if isinstance(content, bytes):
-            content = content.decode('utf-8', 'replace')
-        else:
-            content = str(content)
+            if isinstance(content, bytes):
+                content = content.decode('utf-8', 'replace')
+            else:
+                content = str(content)
 
     fn = os.path.basename(file.name)
     history = history + [(f'```{fn}\n{content}\n```', None)]
