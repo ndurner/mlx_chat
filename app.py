@@ -254,8 +254,8 @@ with gr.Blocks() as demo:
     img_msg = img_btn.upload(add_img, [chatbot, img_btn], [chatbot], queue=False, postprocess=False)
 
     with gr.Accordion("Import/Export", open = False):
-        import_button = gr.UploadButton("Import")
-        export_button = gr.Button("Export")
+        import_button = gr.UploadButton("History Import")
+        export_button = gr.Button("History Export")
         export_button.click(lambda: None, [chatbot], js="""
             (chat_history) => {
                 // Convert the chat history to a JSON string
@@ -273,6 +273,35 @@ with gr.Blocks() as demo:
                 URL.revokeObjectURL(url);
             }
             """)
+        dl_button = gr.Button("File download")
+        dl_button.click(lambda: None, [chatbot], js="""
+            (chat_history) => {
+                // Attempt to extract content enclosed in backticks with an optional filename
+                const contentRegex = /```(\\S*\\.(\\S+))?\\n?([\\s\\S]*?)```/;
+                const match = contentRegex.exec(chat_history[chat_history.length - 1][1]);
+                if (match && match[3]) {
+                    // Extract the content and the file extension
+                    const content = match[3];
+                    const fileExtension = match[2] || 'txt'; // Default to .txt if extension is not found
+                    const filename = match[1] || `download.${fileExtension}`;
+                    // Create a Blob from the content
+                    const blob = new Blob([content], {type: `text/${fileExtension}`});
+                    // Create a download link for the Blob
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    // If the filename from the chat history doesn't have an extension, append the default
+                    a.download = filename.includes('.') ? filename : `${filename}.${fileExtension}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } else {
+                    // Inform the user if the content is malformed or missing
+                    alert('Sorry, the file content could not be found or is in an unrecognized format.');
+                }
+            }
+        """)
         import_button.upload(import_history, inputs=[chatbot, import_button], outputs=[chatbot])
 
 demo.queue().launch()
