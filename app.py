@@ -49,31 +49,33 @@ def add_text(history, text):
     history = history + [(text, None)]
     return history, gr.Textbox(value="", interactive=False)
 
-def add_file(history, file):
-    if file.name.endswith(".docx"):
-        content = process_docx(file.name)
-    else:
-        with open(file.name, mode="rb") as f:
-            content = f.read()
+def add_file(history, files):
+    for file in files:
+        if file.name.endswith(".docx"):
+            content = process_docx(file.name)
+        else:
+            with open(file.name, mode="rb") as f:
+                content = f.read()
 
-            if isinstance(content, bytes):
-                content = content.decode('utf-8', 'replace')
-            else:
-                content = str(content)
+                if isinstance(content, bytes):
+                    content = content.decode('utf-8', 'replace')
+                else:
+                    content = str(content)
 
-    fn = os.path.basename(file.name)
-    history = history + [(f'```{fn}\n{content}\n```', None)]
+        fn = os.path.basename(file.name)
+        history = history + [(f'```{fn}\n{content}\n```', None)]
 
-    gr.Info(f"File added as {fn}")
+        gr.Info(f"File added as {fn}")
 
     return history
 
-def add_img(history, file):
-    if log_to_console:
-        print(f"add_img {file.name}")
-    history = history + [(image_embed_prefix + file.name, None)]
+def add_img(history, files):
+    for file in files:
+        if log_to_console:
+            print(f"add_img {file.name}")
+        history = history + [(image_embed_prefix + file.name, None)]
 
-    gr.Info(f"Image added as {file.name}")
+        gr.Info(f"Image added as {file.name}")
 
     return history
 
@@ -224,7 +226,7 @@ with gr.Blocks() as demo:
     )
 
     with gr.Row():
-        btn = gr.UploadButton("📁 Upload", size="sm")
+        btn = gr.UploadButton("📁 Upload", size="sm", file_count="multiple")
         img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_types=["image"])
         undo_btn = gr.Button("↩️ Undo")
         undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
