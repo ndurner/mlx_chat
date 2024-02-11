@@ -227,7 +227,7 @@ with gr.Blocks() as demo:
 
     with gr.Row():
         btn = gr.UploadButton("📁 Upload", size="sm", file_count="multiple")
-        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_types=["image"])
+        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_count="multiple", file_types=["image"])
         undo_btn = gr.Button("↩️ Undo")
         undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
 
