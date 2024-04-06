@@ -1,6 +1,6 @@
 ---
 title: OAI Chat
-emoji: 📈
+emoji: 🤖
 colorFrom: yellow
 colorTo: gray
 sdk: gradio
@@ -10,4 +10,11 @@ pinned: false
 license: mit
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+Chat interface based on OpenAI transformer models. \
+Features:
+ * Image upload (support for vision via gpt-4-vision)
+ * Word file (DOCX) upload
+ * Plaintext file upload
+ * chat history download
+ * file download
+   * example: download an ICS calendar file the model has created for you
