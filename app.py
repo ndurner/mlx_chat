@@ -3,6 +3,7 @@ import base64
 import os
 from openai import OpenAI
 import json
+from settings_mgr import generate_download_settings_js, generate_upload_settings_js
 
 from doc2json import process_docx
 
@@ -194,6 +195,8 @@ with gr.Blocks() as demo:
         max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=800)
         save_button = gr.Button("Save Settings")  
         load_button = gr.Button("Load Settings")  
+        dl_settings_button = gr.Button("Download Settings")
+        ul_settings_button = gr.Button("Upload Settings")
 
         load_button.click(load_settings, js="""  
             () => {  
@@ -217,6 +220,17 @@ with gr.Blocks() as demo:
                 localStorage.setItem('model', model);  
             }  
         """) 
+
+        control_ids = [('oai_key', '#oai_key textarea'),
+                       ('system_prompt', '#system_prompt textarea'),
+                       ('seed', '#seed textarea'),
+                       ('temp', '#temp input'),
+                       ('max_tokens', '#max_tokens input'),
+                       ('model', '#model')]
+        controls = [oai_key, system_prompt, seed, temp, max_tokens, model]
+
+        dl_settings_button.click(None, controls, js=generate_download_settings_js("oai_chat_settings.bin", control_ids))
+        ul_settings_button.click(None, None, None, js=generate_upload_settings_js(control_ids))
 
     chatbot = gr.Chatbot(
         [],
