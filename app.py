@@ -184,6 +184,11 @@ def import_history(history, file):
 
 with gr.Blocks() as demo:
     gr.Markdown("# OAI Chat (Nils' Version™️)")
+    with gr.Accordion("Startup"):
+        gr.Markdown("""Use of this interface permitted under the terms and conditions of the 
+                    [MIT license](https://github.com/ndurner/oai_chat/blob/main/LICENSE).
+                    Third party terms and conditions apply, particularly
+                    those of the LLM vendor (OpenAI) and hosting provider (Hugging Face).""")
 
     with gr.Accordion("Settings"):
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
