@@ -190,7 +190,6 @@ with gr.Blocks() as demo:
                     Third party terms and conditions apply, particularly
                     those of the LLM vendor (OpenAI) and hosting provider (Hugging Face).""")
 
-    with gr.Accordion("Settings"):
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
                             choices=["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106"])
