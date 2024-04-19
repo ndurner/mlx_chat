@@ -12,6 +12,7 @@ log_to_console = False
 
 # constants
 image_embed_prefix = "🖼️🆙 "
+audio_embed_prefix = "🎙️🆙 "
 
 def encode_image(image_data):
     """Generates a prefix for image base64 data in the required format for the
@@ -74,9 +75,14 @@ def add_img(history, files):
     for file in files:
         if log_to_console:
             print(f"add_img {file.name}")
-        history = history + [(image_embed_prefix + file.name, None)]
+        
+        if file.name.endswith((".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm")):
+            prefix = audio_embed_prefix
+        else:
+            prefix = image_embed_prefix
+        history = history + [(prefix + file.name, None)]
 
-        gr.Info(f"Image added as {file.name}")
+        gr.Info(f"Media added as {file.name}")
 
     return history
 
@@ -111,55 +117,78 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
             api_key=oai_key
         )
 
-        seed_i = None
-        if seed:
-            seed_i = int(seed)
+        if model == "whisper":
+            result = ""
+            whisper_prompt = system_prompt
+            for human, assi in history:
+                if human is not None:
+                    if human.startswith(audio_embed_prefix):
+                        audio_fn = human.lstrip(audio_embed_prefix)
+                        with open(audio_fn, "rb") as f:
+                            transcription = client.audio.transcriptions.create(
+                                model="whisper-1", 
+                                prompt=whisper_prompt,
+                                file=f,
+                                response_format="text"
+                                )
+                        whisper_prompt += f"\n{transcription}"
+                        result += f"\n``` transcript {audio_fn}\n {transcription}\n```"
+                    else:
+                        whisper_prompt += f"\n{human}"
+                if assi is not None:
+                        whisper_prompt += f"\n{assi}"
+        else:
+            seed_i = None
+            if seed:
+                seed_i = int(seed)
 
-        if log_to_console:
-            print(f"bot history: {str(history)}")
+            if log_to_console:
+                print(f"bot history: {str(history)}")
 
-        history_openai_format = []
-        user_msg_parts = []
-        if system_prompt:
-                history_openai_format.append({"role": "system", "content": system_prompt})
-        for human, assi in history:
-            if human is not None:
-                if human.startswith(image_embed_prefix):
-                    with open(human.lstrip(image_embed_prefix), mode="rb") as f:
-                        content = f.read()
-                    user_msg_parts.append({"type": "image_url",
-                                           "image_url":{"url": encode_image(content)}})
-                else:
-                    user_msg_parts.append({"type": "text", "text": human})
+            history_openai_format = []
+            user_msg_parts = []
+            if system_prompt:
+                    history_openai_format.append({"role": "system", "content": system_prompt})
+            for human, assi in history:
+                if human is not None:
+                    if human.startswith(image_embed_prefix):
+                        with open(human.lstrip(image_embed_prefix), mode="rb") as f:
+                            content = f.read()
+                        user_msg_parts.append({"type": "image_url",
+                                            "image_url":{"url": encode_image(content)}})
+                    else:
+                        user_msg_parts.append({"type": "text", "text": human})
 
-            if assi is not None:
-                if user_msg_parts:
-                    history_openai_format.append({"role": "user", "content": user_msg_parts})
-                    user_msg_parts = []
+                if assi is not None:
+                    if user_msg_parts:
+                        history_openai_format.append({"role": "user", "content": user_msg_parts})
+                        user_msg_parts = []
 
-                history_openai_format.append({"role": "assistant", "content": assi})
+                    history_openai_format.append({"role": "assistant", "content": assi})
 
-        if message:
-            user_msg_parts.append({"type": "text", "text": human})
-        
-        if user_msg_parts:
-            history_openai_format.append({"role": "user", "content": user_msg_parts})
+            if message:
+                user_msg_parts.append({"type": "text", "text": human})
+            
+            if user_msg_parts:
+                history_openai_format.append({"role": "user", "content": user_msg_parts})
 
-        if log_to_console:
-            print(f"br_prompt: {str(history_openai_format)}")
+            if log_to_console:
+                print(f"br_prompt: {str(history_openai_format)}")
 
-        response = client.chat.completions.create(
-            model=model,
-            messages= history_openai_format,
-            temperature=temperature,
-            seed=seed_i,
-            max_tokens=max_tokens
-        )
+            response = client.chat.completions.create(
+                model=model,
+                messages= history_openai_format,
+                temperature=temperature,
+                seed=seed_i,
+                max_tokens=max_tokens
+            )
 
-        if log_to_console:
-            print(f"br_response: {str(response)}")
+            if log_to_console:
+                print(f"br_response: {str(response)}")
 
-        history[-1][1] = response.choices[0].message.content
+            result = response.choices[0].message.content
+
+        history[-1][1] = result
         if log_to_console:
             print(f"br_result: {str(history)}")
 
@@ -192,7 +221,7 @@ with gr.Blocks() as demo:
 
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
-                            choices=["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106"])
+                            choices=["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106", "whisper"])
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
@@ -245,7 +274,7 @@ with gr.Blocks() as demo:
 
     with gr.Row():
         btn = gr.UploadButton("📁 Upload", size="sm", file_count="multiple")
-        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_count="multiple", file_types=["image"])
+        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_count="multiple", file_types=["image", "audio"])
         undo_btn = gr.Button("↩️ Undo")
         undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
 
