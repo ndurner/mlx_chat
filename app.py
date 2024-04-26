@@ -217,7 +217,7 @@ def import_history(history, file):
 
     return history, system_prompt.value  # Return system prompt value to be set in the UI
 
-with gr.Blocks() as demo:
+with gr.Blocks(delete_cache=(86400, 86400)) as demo:
     gr.Markdown("# OAI Chat (Nils' Version™️)")
     with gr.Accordion("Startup"):
         gr.Markdown("""Use of this interface permitted under the terms and conditions of the 
