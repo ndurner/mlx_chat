@@ -206,10 +206,18 @@ def import_history(history, file):
         else:
             content = str(content)
 
-    # Deserialize the JSON content to history
-    history = json.loads(content)
-    # The history is returned and will be set to the chatbot component
-    return history
+    # Deserialize the JSON content
+    import_data = json.loads(content)
+
+    # Check if 'history' key exists for backward compatibility
+    if 'history' in import_data:
+        history = import_data['history']
+        system_prompt.value = import_data.get('system_prompt', '')  # Set default if not present
+    else:
+        # Assume it's an old format with only history data
+        history = import_data
+
+    return history, system_prompt.value  # Return system prompt value to be set in the UI
 
 with gr.Blocks() as demo:
     gr.Markdown("# OAI Chat (Nils' Version™️)")
@@ -310,13 +318,14 @@ with gr.Blocks() as demo:
     with gr.Accordion("Import/Export", open = False):
         import_button = gr.UploadButton("History Import")
         export_button = gr.Button("History Export")
-        export_button.click(lambda: None, [chatbot], js="""
-            (chat_history) => {
-                // Convert the chat history to a JSON string
-                const history_json = JSON.stringify(chat_history);
-                // Create a Blob from the JSON string
+        export_button.click(lambda: None, [chatbot, system_prompt], js="""
+            (chat_history, system_prompt) => {
+                const export_data = {
+                    history: chat_history,
+                    system_prompt: system_prompt
+                };
+                const history_json = JSON.stringify(export_data);
                 const blob = new Blob([history_json], {type: 'application/json'});
-                // Create a download link
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -356,6 +365,6 @@ with gr.Blocks() as demo:
                 }
             }
         """)
-        import_button.upload(import_history, inputs=[chatbot, import_button], outputs=[chatbot])
+        import_button.upload(import_history, inputs=[chatbot, import_button], outputs=[chatbot, system_prompt])
 
 demo.queue().launch()
