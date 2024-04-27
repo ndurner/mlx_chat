@@ -203,6 +203,7 @@ def import_history(history, file):
             content = content.decode('utf-8', 'replace')
         else:
             content = str(content)
+    os.remove(file.name)
 
     # Deserialize the JSON content
     import_data = json.loads(content)
