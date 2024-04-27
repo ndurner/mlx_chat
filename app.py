@@ -10,6 +10,8 @@ from doc2json import process_docx
 dump_controls = False
 log_to_console = False
 
+temp_files = []
+
 # constants
 image_embed_prefix = "🖼️🆙 "
 audio_embed_prefix = "🎙️🆙 "
@@ -67,10 +69,14 @@ def add_file(history, files):
         fn = os.path.basename(file.name)
         history = history + [(f'```{fn}\n{content}\n```', None)]
 
+        os.remove(file.name)
+
     return history
 
 def add_img(history, files):
     for file in files:
+        temp_files.append(file.name)
+
         if log_to_console:
             print(f"add_img {file.name}")
         
@@ -78,6 +84,7 @@ def add_img(history, files):
             prefix = audio_embed_prefix
         else:
             prefix = image_embed_prefix
+
         history = history + [(prefix + file.name, None)]
 
         gr.Info(f"Media added as {file.name}")
@@ -366,4 +373,5 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
         """)
         import_button.upload(import_history, inputs=[chatbot, import_button], outputs=[chatbot, system_prompt])
 
+demo.unload(lambda: [os.remove(file) for file in temp_files])
 demo.queue().launch()
