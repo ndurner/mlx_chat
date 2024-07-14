@@ -12,10 +12,6 @@ log_to_console = False
 
 temp_files = []
 
-# constants
-image_embed_prefix = "🖼️🆙 "
-audio_embed_prefix = "🎙️🆙 "
-
 def encode_image(image_data):
     """Generates a prefix for image base64 data in the required format for the
     four known image formats: png, jpeg, gif, and webp.
@@ -49,10 +45,6 @@ def encode_image(image_data):
 
     return f"data:image/{image_type};base64,{base64.b64encode(image_data).decode('utf-8')}"
 
-def add_text(history, text):
-    history = history + [(text, None)]
-    return history, gr.Textbox(value="", interactive=False)
-
 def add_file(history, files):
     for file in files:
         if file.name.endswith(".docx"):
@@ -72,27 +64,6 @@ def add_file(history, files):
         os.remove(file.name)
 
     return history
-
-def add_img(history, files):
-    for file in files:
-        temp_files.append(file.name)
-
-        if log_to_console:
-            print(f"add_img {file.name}")
-        
-        if file.name.endswith((".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm")):
-            prefix = audio_embed_prefix
-        else:
-            prefix = image_embed_prefix
-
-        history = history + [(prefix + file.name, None)]
-
-        gr.Info(f"Media added as {file.name}")
-
-    return history
-
-def submit_text(txt_value):
-    return add_text([chatbot, txt_value], [chatbot, txt_value])
 
 def undo(history):
     history.pop()
@@ -127,8 +98,8 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
             whisper_prompt = system_prompt
             for human, assi in history:
                 if human is not None:
-                    if human.startswith(audio_embed_prefix):
-                        audio_fn = human.lstrip(audio_embed_prefix)
+                    if type(human) is tuple:
+                        audio_fn = human[0]
                         with open(audio_fn, "rb") as f:
                             transcription = client.audio.transcriptions.create(
                                 model="whisper-1", 
@@ -156,11 +127,31 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                     history_openai_format.append({"role": "system", "content": system_prompt})
             for human, assi in history:
                 if human is not None:
-                    if human.startswith(image_embed_prefix):
-                        with open(human.lstrip(image_embed_prefix), mode="rb") as f:
-                            content = f.read()
-                        user_msg_parts.append({"type": "image_url",
-                                            "image_url":{"url": encode_image(content)}})
+                    if type(human) is tuple:
+                        fn = human[0]
+                        if fn.endswith(".docx"):
+                            content = process_docx(fn)
+                        else:
+                            with open(fn, mode="rb") as f:
+                                content = f.read()
+
+                            isImage = False
+                            if isinstance(content, bytes):
+                                try:
+                                    # try to add as image
+                                    content = encode_image(content)
+                                    isImage = True
+                                except:
+                                    # not an image, try text
+                                    content = content.decode('utf-8', 'replace')
+                            else:
+                                content = str(content)
+
+                            if isImage:
+                                user_msg_parts.append({"type": "image_url",
+                                                    "image_url":{"url": content}})
+                            else:
+                                user_msg_parts.append({"type": "text", "text": content})
                     else:
                         user_msg_parts.append({"type": "text", "text": human})
 
@@ -171,11 +162,16 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
 
                     history_openai_format.append({"role": "assistant", "content": assi})
 
-            if message:
-                user_msg_parts.append({"type": "text", "text": human})
-            
-            if user_msg_parts:
-                history_openai_format.append({"role": "user", "content": user_msg_parts})
+            if message['text']:
+                user_msg_parts.append({"type": "text", "text": message['text']})
+            if message['files']:
+                for file in message['files']:
+                    with open(file['path'], mode="rb") as f:
+                        content = f.read()
+                    user_msg_parts.append({"type": "image_url",
+                                        "image_url":{"url": encode_image(content)}})
+            history_openai_format.append({"role": "user", "content": user_msg_parts})
+            user_msg_parts = []
 
             if log_to_console:
                 print(f"br_prompt: {str(history_openai_format)}")
@@ -193,14 +189,13 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
 
             result = response.choices[0].message.content
 
-        history[-1][1] = result
         if log_to_console:
             print(f"br_result: {str(history)}")
 
     except Exception as e:
         raise gr.Error(f"Error: {str(e)}")
 
-    return "", history
+    return result
 
 def import_history(history, file):
     with open(file.name, mode="rb") as f:
@@ -279,47 +274,17 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
         dl_settings_button.click(None, controls, js=generate_download_settings_js("oai_chat_settings.bin", control_ids))
         ul_settings_button.click(None, None, None, js=generate_upload_settings_js(control_ids))
 
-    chatbot = gr.Chatbot(
-        [],
-        elem_id="chatbot",
-        show_copy_button=True,
-        height=350
-    )
-
-    with gr.Row():
-        btn = gr.UploadButton("📁 Upload", size="sm", file_count="multiple")
-        img_btn = gr.UploadButton("🖼️ Upload", size="sm", file_count="multiple", file_types=["image", "audio"])
-        undo_btn = gr.Button("↩️ Undo")
-        undo_btn.click(undo, inputs=[chatbot], outputs=[chatbot])
-
-        clear = gr.ClearButton(chatbot, value="🗑️ Clear")
-
-    with gr.Row():
-        txt = gr.TextArea(
-            scale=4,
-            show_label=False,
-            placeholder="Enter text and press enter, or upload a file",
-            container=False,
-            lines=3,            
-        )
-        submit_btn = gr.Button("🚀 Send", scale=0)
-        submit_click = submit_btn.click(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-            bot, [txt, chatbot, oai_key, system_prompt, seed, temp, max_tokens, model], [txt, chatbot],
-        )
-        submit_click.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
+    chat = gr.ChatInterface(fn=bot, multimodal=True, additional_inputs=controls, retry_btn = None, autofocus = False)
+    chat.textbox.file_count = "multiple"
+    chatbot = chat.chatbot
+    chatbot.show_copy_button = True
+    chatbot.height = 350
 
     if dump_controls:
         with gr.Row():
             dmp_btn = gr.Button("Dump")
             txt_dmp = gr.Textbox("Dump")
             dmp_btn.click(dump, inputs=[chatbot], outputs=[txt_dmp])
-
-    txt_msg = txt.submit(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-        bot, [txt, chatbot, oai_key, system_prompt, seed, temp, max_tokens, model], [txt, chatbot],
-    )
-    txt_msg.then(lambda: gr.Textbox(interactive=True), None, [txt], queue=False)
-    file_msg = btn.upload(add_file, [chatbot, btn], [chatbot], queue=False, postprocess=False)
-    img_msg = img_btn.upload(add_img, [chatbot, img_btn], [chatbot], queue=False, postprocess=False)
 
     with gr.Accordion("Import/Export", open = False):
         import_button = gr.UploadButton("History Import")
