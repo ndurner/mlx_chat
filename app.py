@@ -3,6 +3,9 @@ import base64
 import os
 from openai import OpenAI
 import json
+import fitz
+from PIL import Image
+import io
 from settings_mgr import generate_download_settings_js, generate_upload_settings_js
 
 from doc2json import process_docx
@@ -44,6 +47,79 @@ def encode_image(image_data):
         raise Exception("Unknown image type")
 
     return f"data:image/{image_type};base64,{base64.b64encode(image_data).decode('utf-8')}"
+
+def process_pdf_img(pdf_fn: str):
+    pdf = fitz.open(pdf_fn)
+    message_parts = []
+
+    for page in pdf.pages():
+        # Create a transformation matrix for rendering at the calculated scale
+        mat = fitz.Matrix(0.6, 0.6)
+        
+        # Render the page to a pixmap
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        
+        # Convert pixmap to PIL Image
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        
+        # Convert PIL Image to bytes
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Encode image to base64
+        base64_encoded = base64.b64encode(img_byte_arr).decode('utf-8')
+        
+        # Construct the data URL
+        image_url = f"data:image/png;base64,{base64_encoded}"
+        
+        # Append the message part
+        message_parts.append({
+            "type": "text",
+            "text": f"Page {page.number} of file '{pdf_fn}'"
+        })
+        message_parts.append({
+            "type": "image_url",
+            "image_url": {
+                "url": image_url,
+                "detail": "high"
+            }
+        })
+
+    pdf.close()
+
+    return message_parts
+
+def encode_file(fn: str) -> list:
+    user_msg_parts = []
+
+    if fn.endswith(".docx"):
+        user_msg_parts.append({"type": "text", "text": process_docx(fn)})
+    elif fn.endswith(".pdf"):
+        user_msg_parts.extend(process_pdf_img(fn))
+    else:
+        with open(fn, mode="rb") as f:
+            content = f.read()
+
+        isImage = False
+        if isinstance(content, bytes):
+            try:
+                # try to add as image
+                content = encode_image(content)
+                isImage = True
+            except:
+                # not an image, try text
+                content = content.decode('utf-8', 'replace')
+        else:
+            content = str(content)
+
+        if isImage:
+            user_msg_parts.append({"type": "image_url",
+                                "image_url":{"url": content}})
+        else:
+            user_msg_parts.append({"type": "text", "text": content})
+
+    return user_msg_parts
 
 def undo(history):
     history.pop()
@@ -108,30 +184,7 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
             for human, assi in history:
                 if human is not None:
                     if type(human) is tuple:
-                        fn = human[0]
-                        if fn.endswith(".docx"):
-                            content = process_docx(fn)
-                        else:
-                            with open(fn, mode="rb") as f:
-                                content = f.read()
-
-                            isImage = False
-                            if isinstance(content, bytes):
-                                try:
-                                    # try to add as image
-                                    content = encode_image(content)
-                                    isImage = True
-                                except:
-                                    # not an image, try text
-                                    content = content.decode('utf-8', 'replace')
-                            else:
-                                content = str(content)
-
-                            if isImage:
-                                user_msg_parts.append({"type": "image_url",
-                                                    "image_url":{"url": content}})
-                            else:
-                                user_msg_parts.append({"type": "text", "text": content})
+                        user_msg_parts.extend(encode_file(human[0]))
                     else:
                         user_msg_parts.append({"type": "text", "text": human})
 
@@ -146,10 +199,7 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                 user_msg_parts.append({"type": "text", "text": message['text']})
             if message['files']:
                 for file in message['files']:
-                    with open(file['path'], mode="rb") as f:
-                        content = f.read()
-                    user_msg_parts.append({"type": "image_url",
-                                        "image_url":{"url": encode_image(content)}})
+                    user_msg_parts.extend(encode_file(file['path']))
             history_openai_format.append({"role": "user", "content": user_msg_parts})
             user_msg_parts = []
 
