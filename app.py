@@ -45,26 +45,6 @@ def encode_image(image_data):
 
     return f"data:image/{image_type};base64,{base64.b64encode(image_data).decode('utf-8')}"
 
-def add_file(history, files):
-    for file in files:
-        if file.name.endswith(".docx"):
-            content = process_docx(file.name)
-        else:
-            with open(file.name, mode="rb") as f:
-                content = f.read()
-
-                if isinstance(content, bytes):
-                    content = content.decode('utf-8', 'replace')
-                else:
-                    content = str(content)
-
-        fn = os.path.basename(file.name)
-        history = history + [(f'```{fn}\n{content}\n```', None)]
-
-        os.remove(file.name)
-
-    return history
-
 def undo(history):
     history.pop()
     return history
