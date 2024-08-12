@@ -264,7 +264,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 1, label="Temperature", elem_id="temp", value=1)
-        max_tokens = gr.Slider(1, 4000, label="Max. Tokens", elem_id="max_tokens", value=800)
+        max_tokens = gr.Slider(1, 16384, label="Max. Tokens", elem_id="max_tokens", value=800)
         save_button = gr.Button("Save Settings")  
         load_button = gr.Button("Load Settings")  
         dl_settings_button = gr.Button("Download Settings")
