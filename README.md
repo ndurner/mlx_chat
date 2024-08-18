@@ -21,3 +21,5 @@ Features:
  * chat history download
  * file download
    * example: download an ICS calendar file the model has created for you
+* streaming chat
+* image generation (via DALL-E 3)
