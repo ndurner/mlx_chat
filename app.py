@@ -269,7 +269,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
         gr.Markdown("""Use of this interface permitted under the terms and conditions of the 
                     [MIT license](https://github.com/ndurner/oai_chat/blob/main/LICENSE).
                     Third party terms and conditions apply, particularly
-                    those of the LLM vendor (OpenAI) and hosting provider (Hugging Face).""")
+                    those of the LLM vendor (OpenAI) and hosting provider (Hugging Face). This app and the AI models may make mistakes, so verify any outputs.""")
 
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
