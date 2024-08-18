@@ -195,11 +195,11 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
 
                     history_openai_format.append({"role": "assistant", "content": assi})
 
-            if message['text']:
-                user_msg_parts.append({"type": "text", "text": message['text']})
-            if message['files']:
-                for file in message['files']:
-                    user_msg_parts.extend(encode_file(file['path']))
+            if message.text:
+                user_msg_parts.append({"type": "text", "text": message.text})
+            if message.files:
+                for file in message.files:
+                    user_msg_parts.extend(encode_file(file.path))
             history_openai_format.append({"role": "user", "content": user_msg_parts})
             user_msg_parts = []
 
@@ -211,21 +211,34 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                 messages= history_openai_format,
                 temperature=temperature,
                 seed=seed_i,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                stream=True,
+                stream_options={"include_usage": True}
             )
 
-            if log_to_console:
-                print(f"br_response: {str(response)}")
+            partial_response=""
+            for chunk in response:
+                if chunk.choices:
+                    txt = ""
+                    for choice in chunk.choices:
+                        cont = choice.delta.content
+                        if cont:
+                            txt += cont
 
-            result = response.choices[0].message.content
+                    if log_to_console:
+                        print(f"br_response: {txt}")
+
+                    partial_response += txt
+                    yield partial_response
+
+                if chunk.usage and log_to_console:
+                    print(f"usage: {chunk.usage}")
 
         if log_to_console:
             print(f"br_result: {str(history)}")
 
     except Exception as e:
         raise gr.Error(f"Error: {str(e)}")
-
-    return result
 
 def import_history(history, file):
     with open(file.name, mode="rb") as f:
