@@ -169,6 +169,15 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                         whisper_prompt += f"\n{human}"
                 if assi is not None:
                         whisper_prompt += f"\n{assi}"
+        elif model == "dall-e-3":
+            response = client.images.generate(
+                model=model,
+                prompt=message.text,
+                size="1792x1024",
+                quality="hd",
+                n=1,
+            )
+            yield gr.Image(response.data[0].url)
         else:
             seed_i = None
             if seed:
@@ -273,7 +282,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
 
         oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
-                            choices=["gpt-4-turbo", "gpt-4o-2024-08-06", "chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106", "whisper"])
+                            choices=["gpt-4-turbo", "gpt-4o-2024-08-06", "chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106", "whisper", "dall-e-3"])
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 2, label="Temperature", elem_id="temp", value=1)
