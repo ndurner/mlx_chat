@@ -155,20 +155,29 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
             for human, assi in history:
                 if human is not None:
                     if type(human) is tuple:
-                        audio_fn = human[0]
-                        with open(audio_fn, "rb") as f:
-                            transcription = client.audio.transcriptions.create(
-                                model="whisper-1", 
-                                prompt=whisper_prompt,
-                                file=f,
-                                response_format="text"
-                                )
-                        whisper_prompt += f"\n{transcription}"
-                        result += f"\n``` transcript {audio_fn}\n {transcription}\n```"
+                        pass
                     else:
                         whisper_prompt += f"\n{human}"
                 if assi is not None:
                         whisper_prompt += f"\n{assi}"
+
+            if message.text:
+                whisper_prompt += message.text
+            if message.files:
+                for file in message.files:
+                    audio_fn = os.path.basename(file.path)
+                    with open(file.path, "rb") as f:
+                        transcription = client.audio.transcriptions.create(
+                            model="whisper-1", 
+                            prompt=whisper_prompt,
+                            file=f,
+                            response_format="text"
+                            )
+                    whisper_prompt += f"\n{transcription}"
+                    result += f"\n``` transcript {audio_fn}\n {transcription}\n```"
+            
+            yield result
+
         elif model == "dall-e-3":
             response = client.images.generate(
                 model=model,
