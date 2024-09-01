@@ -243,9 +243,6 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                         if cont:
                             txt += cont
 
-                    if log_to_console:
-                        print(f"br_response: {txt}")
-
                     partial_response += txt
                     yield partial_response
 
