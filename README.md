@@ -1,25 +1,10 @@
----
-title: OAI Chat
-emoji: 🤖
-colorFrom: yellow
-colorTo: gray
-sdk: gradio
-sdk_version: 4.41.0
-app_file: app.py
-pinned: false
-license: mit
----
+# MLX Chat
 
-# OAI Chat
-
-Chat interface based on OpenAI transformer models. \
+Chat interface for [MLX](https://github.com/ml-explore/mlx) for on-device Language Model use on Apple Silicon.
+Built on [FastMLX](https://github.com/Blaizzy/fastmlx).
 Features:
- * Image upload (support for vision via gpt-4-vision)
- * Word file (DOCX) upload
- * PDF file support (via image rendering & GPT-4V)
  * Plaintext file upload
  * chat history download
  * file download
    * example: download an ICS calendar file the model has created for you
 * streaming chat
-* image generation (via DALL-E 3)

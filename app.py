@@ -256,15 +256,15 @@ def import_history(history, file):
     return history, system_prompt.value  # Return system prompt value to be set in the UI
 
 with gr.Blocks(delete_cache=(86400, 86400)) as demo:
-    gr.Markdown("# OAI Chat (Nils' Version™️)")
+    gr.Markdown("# MLX Chat (Nils' Version™️)")
     with gr.Accordion("Startup"):
         gr.Markdown("""Use of this interface permitted under the terms and conditions of the 
                     [MIT license](https://github.com/ndurner/oai_chat/blob/main/LICENSE).
                     Third party terms and conditions apply, particularly
-                    those of the LLM vendor (OpenAI) and hosting provider (Hugging Face). This app and the AI models may make mistakes, so verify any outputs.""")
+                    those of the LLM vendor and hosting provider (e.g. Hugging Face). This app and the AI models may make mistakes, so verify any outputs.""")
 
-        model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
-                            choices=["gpt-4-turbo", "gpt-4o-2024-08-06", "chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106", "whisper", "dall-e-3"])
+        model = gr.Dropdown(label="Model", value="google/gemma-2-9b-it", allow_custom_value=True, elem_id="model",
+                            choices=["google/gemma-2-9b-it"])
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         temp = gr.Slider(0, 2, label="Temperature", elem_id="temp", value=1)
         max_tokens = gr.Slider(1, 16384, label="Max. Tokens", elem_id="max_tokens", value=800)
