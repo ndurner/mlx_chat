@@ -1,7 +1,7 @@
 import gradio as gr
 import base64
 import os
-from openai import OpenAI
+import requests
 import json
 import fitz
 from PIL import Image
@@ -91,12 +91,15 @@ def process_pdf_img(pdf_fn: str):
     return message_parts
 
 def encode_file(fn: str) -> list:
-    user_msg_parts = []
+    user_msg_parts = {}
+    text_content = ""
 
-    if fn.endswith(".docx"):
-        user_msg_parts.append({"type": "text", "text": process_docx(fn)})
-    elif fn.endswith(".pdf"):
-        user_msg_parts.extend(process_pdf_img(fn))
+    # if fn.endswith(".docx"):
+    #     user_msg_parts.append({"type": "text", "text": process_docx(fn)})
+    # elif fn.endswith(".pdf"):
+    #     user_msg_parts.extend(process_pdf_img(fn))
+    if False:
+        pass
     else:
         with open(fn, mode="rb") as f:
             content = f.read()
@@ -109,15 +112,16 @@ def encode_file(fn: str) -> list:
                 isImage = True
             except:
                 # not an image, try text
-                content = content.decode('utf-8', 'replace')
+                text_content = text_content + content.decode('utf-8', 'replace')
         else:
-            content = str(content)
+            text_content = text_content + str(content)
 
         if isImage:
-            user_msg_parts.append({"type": "image_url",
-                                "image_url":{"url": content}})
+            pass
+            # user_msg_parts.append({"type": "image_url",
+            #                     "image_url":{"url": content}})
         else:
-            user_msg_parts.append({"type": "text", "text": content})
+            user_msg_parts["text"] = text_content
 
     return user_msg_parts
 
@@ -145,10 +149,6 @@ def process_values_js():
 
 def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens, model):
     try:
-        client = OpenAI(
-            api_key=oai_key
-        )
-
         if model == "whisper":
             result = ""
             whisper_prompt = system_prompt
@@ -196,61 +196,78 @@ def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens,
                 print(f"bot history: {str(history)}")
 
             history_openai_format = []
-            user_msg_parts = []
+            user_msg_parts = ""
             if system_prompt:
                     history_openai_format.append({"role": "system", "content": system_prompt})
             for human, assi in history:
                 if human is not None:
                     if type(human) is tuple:
-                        user_msg_parts.extend(encode_file(human[0]))
+                        fc = encode_file(human[0])
+                        if fc["text"]:
+                            user_msg_parts = user_msg_parts + fc["text"]
                     else:
-                        user_msg_parts.append({"type": "text", "text": human})
+                        user_msg_parts = user_msg_parts + human
 
                 if assi is not None:
                     if user_msg_parts:
                         history_openai_format.append({"role": "user", "content": user_msg_parts})
-                        user_msg_parts = []
+                        user_msg_parts = ""
 
                     history_openai_format.append({"role": "assistant", "content": assi})
 
-            if message.text:
-                user_msg_parts.append({"type": "text", "text": message.text})
-            if message.files:
-                for file in message.files:
-                    user_msg_parts.extend(encode_file(file.path))
+            if message['text']:
+                user_msg_parts = user_msg_parts + message['text']
+            if message['files']:
+                for file in message['files']:
+                    fc = encode_file(file['path'])
+                    if fc["text"]:
+                        user_msg_parts = user_msg_parts + fc["text"]
             history_openai_format.append({"role": "user", "content": user_msg_parts})
             user_msg_parts = []
 
             if log_to_console:
                 print(f"br_prompt: {str(history_openai_format)}")
 
-            response = client.chat.completions.create(
-                model=model,
-                messages= history_openai_format,
-                temperature=temperature,
-                seed=seed_i,
-                max_tokens=max_tokens,
-                stream=True,
-                stream_options={"include_usage": True}
-            )
+            url = "http://localhost:8000/v1/chat/completions"
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "model": model,
+                "messages": history_openai_format,
+                "max_tokens": max_tokens,
+                "stream": True
+            }
 
-            partial_response=""
-            for chunk in response:
-                if chunk.choices:
-                    txt = ""
-                    for choice in chunk.choices:
-                        cont = choice.delta.content
-                        if cont:
-                            txt += cont
+            response = requests.post(url, headers=headers, json=data, stream=True)
 
-                    partial_response += txt
-                    yield partial_response
+            if response.status_code != 200:
+                gr.Error(f"Error: Received status code {response.status_code} {response.text}")
+                return
 
-                if chunk.usage and log_to_console:
-                    print(f"usage: {chunk.usage}")
+            full_content = ""
+
+            try:
+                for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                event_data = line[6:]  # Remove 'data: ' prefix
+                                if event_data == '[DONE]':
+                                    break
+                                try:
+                                    chunk_data = json.loads(event_data)
+                                    content = chunk_data['choices'][0]['delta']['content']
+                                    full_content += content
+                                    yield full_content
+                                except json.JSONDecodeError:
+                                    gr.Error(f"Failed to decode JSON: {event_data}")
+                                except KeyError:
+                                    gr.Error(f"Unexpected data structure: {chunk_data}")
+
+            except requests.exceptions.RequestException as e:
+                gr.Error(f"An error occurred: {e}")
 
         if log_to_console:
-            print(f"br_result: {str(history)}")
+            print(f"br_result: {str(full_content)}")
 
     except Exception as e:
         raise gr.Error(f"Error: {str(e)}")
