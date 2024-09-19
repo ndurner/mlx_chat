@@ -143,62 +143,22 @@ def save_settings(acc, sec, prompt, temp, tokens, model):
 def process_values_js():
     return """
     () => {
-        return ["oai_key", "system_prompt", "seed"];
+        return ["system_prompt"];
     }
     """
 
-def bot(message, history, oai_key, system_prompt, seed, temperature, max_tokens, model):
+def bot(message, history, system_prompt, temperature, max_tokens, model):
     try:
-        if model == "whisper":
-            result = ""
-            whisper_prompt = system_prompt
-            for human, assi in history:
-                if human is not None:
-                    if type(human) is tuple:
-                        pass
-                    else:
-                        whisper_prompt += f"\n{human}"
-                if assi is not None:
-                        whisper_prompt += f"\n{assi}"
-
-            if message.text:
-                whisper_prompt += message.text
-            if message.files:
-                for file in message.files:
-                    audio_fn = os.path.basename(file.path)
-                    with open(file.path, "rb") as f:
-                        transcription = client.audio.transcriptions.create(
-                            model="whisper-1", 
-                            prompt=whisper_prompt,
-                            file=f,
-                            response_format="text"
-                            )
-                    whisper_prompt += f"\n{transcription}"
-                    result += f"\n``` transcript {audio_fn}\n {transcription}\n```"
-            
-            yield result
-
-        elif model == "dall-e-3":
-            response = client.images.generate(
-                model=model,
-                prompt=message.text,
-                size="1792x1024",
-                quality="hd",
-                n=1,
-            )
-            yield gr.Image(response.data[0].url)
+        if False:
+            pass
         else:
-            seed_i = None
-            if seed:
-                seed_i = int(seed)
-
             if log_to_console:
                 print(f"bot history: {str(history)}")
 
             history_openai_format = []
             user_msg_parts = ""
             if system_prompt:
-                    history_openai_format.append({"role": "system", "content": system_prompt})
+                    user_msg_parts = system_prompt + "\n"
             for human, assi in history:
                 if human is not None:
                     if type(human) is tuple:
@@ -303,11 +263,9 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
                     Third party terms and conditions apply, particularly
                     those of the LLM vendor (OpenAI) and hosting provider (Hugging Face). This app and the AI models may make mistakes, so verify any outputs.""")
 
-        oai_key = gr.Textbox(label="OpenAI API Key", elem_id="oai_key")
         model = gr.Dropdown(label="Model", value="gpt-4-turbo", allow_custom_value=True, elem_id="model",
                             choices=["gpt-4-turbo", "gpt-4o-2024-08-06", "chatgpt-4o-latest", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo-preview", "gpt-4-1106-preview", "gpt-4", "gpt-4-vision-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-1106", "whisper", "dall-e-3"])
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
-        seed = gr.Textbox(label="Seed", elem_id="seed")
         temp = gr.Slider(0, 2, label="Temperature", elem_id="temp", value=1)
         max_tokens = gr.Slider(1, 16384, label="Max. Tokens", elem_id="max_tokens", value=800)
         save_button = gr.Button("Save Settings")  
@@ -317,7 +275,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
 
         load_button.click(load_settings, js="""  
             () => {  
-                let elems = ['#oai_key textarea', '#system_prompt textarea', '#seed textarea', '#temp input', '#max_tokens input', '#model'];
+                let elems = ['#system_prompt textarea', '#temp input', '#max_tokens input', '#model'];
                 elems.forEach(elem => {
                     let item = document.querySelector(elem);
                     let event = new InputEvent('input', { bubbles: true });
@@ -327,24 +285,21 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
             }  
         """)
 
-        save_button.click(save_settings, [oai_key, system_prompt, seed, temp, max_tokens, model], js="""  
-            (oai, sys, seed, temp, ntok, model) => {  
-                localStorage.setItem('oai_key', oai);  
+        save_button.click(save_settings, [system_prompt, temp, max_tokens, model], js="""  
+            (oai, sys, temp, ntok, model) => {  
                 localStorage.setItem('system_prompt', sys);  
-                localStorage.setItem('seed', seed);  
                 localStorage.setItem('temp', document.querySelector('#temp input').value);  
                 localStorage.setItem('max_tokens', document.querySelector('#max_tokens input').value);  
                 localStorage.setItem('model', model);  
             }  
         """) 
 
-        control_ids = [('oai_key', '#oai_key textarea'),
+        control_ids = [
                        ('system_prompt', '#system_prompt textarea'),
-                       ('seed', '#seed textarea'),
                        ('temp', '#temp input'),
                        ('max_tokens', '#max_tokens input'),
                        ('model', '#model')]
-        controls = [oai_key, system_prompt, seed, temp, max_tokens, model]
+        controls = [system_prompt, temp, max_tokens, model]
 
         dl_settings_button.click(None, controls, js=generate_download_settings_js("oai_chat_settings.bin", control_ids))
         ul_settings_button.click(None, None, None, js=generate_upload_settings_js(control_ids))
