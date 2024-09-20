@@ -263,8 +263,8 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
                     Third party terms and conditions apply, particularly
                     those of the LLM vendor and hosting provider (e.g. Hugging Face). This app and the AI models may make mistakes, so verify any outputs.""")
 
-        model = gr.Dropdown(label="Model", value="google/gemma-2-9b-it", allow_custom_value=True, elem_id="model",
-                            choices=["google/gemma-2-9b-it"])
+        model = gr.Dropdown(label="Model", value="meta-llama/Meta-Llama-3.1-8B-Instruct", allow_custom_value=True, elem_id="model",
+                            choices=["meta-llama/Meta-Llama-3.1-8B-Instruct", "google/gemma-2-9b-it"])
         system_prompt = gr.TextArea("You are a helpful yet diligent AI assistant. Answer faithfully and factually correct. Respond with 'I do not know' if uncertain.", label="System Prompt", lines=3, max_lines=250, elem_id="system_prompt")  
         temp = gr.Slider(0, 2, label="Temperature", elem_id="temp", value=1)
         max_tokens = gr.Slider(1, 16384, label="Max. Tokens", elem_id="max_tokens", value=800)
