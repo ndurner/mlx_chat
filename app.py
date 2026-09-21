@@ -14,6 +14,7 @@ dump_controls = False
 log_to_console = False
 
 temp_files = []
+API_BASE_URL = os.environ.get("MLX_CHAT_API_BASE_URL", "http://127.0.0.1:1976").rstrip("/")
 
 def encode_image(image_data):
     """Generates a prefix for image base64 data in the required format for the
@@ -91,15 +92,12 @@ def process_pdf_img(pdf_fn: str):
     return message_parts
 
 def encode_file(fn: str) -> list:
-    user_msg_parts = {}
-    text_content = ""
+    user_msg_parts = []
 
-    # if fn.endswith(".docx"):
-    #     user_msg_parts.append({"type": "text", "text": process_docx(fn)})
-    # elif fn.endswith(".pdf"):
-    #     user_msg_parts.extend(process_pdf_img(fn))
-    if False:
-        pass
+    if fn.endswith(".docx"):
+        user_msg_parts.append({"type": "text", "text": process_docx(fn)})
+    elif fn.endswith(".pdf"):
+        user_msg_parts.extend(process_pdf_img(fn))
     else:
         with open(fn, mode="rb") as f:
             content = f.read()
@@ -112,16 +110,15 @@ def encode_file(fn: str) -> list:
                 isImage = True
             except:
                 # not an image, try text
-                text_content = text_content + content.decode('utf-8', 'replace')
+                content = content.decode('utf-8', 'replace')
         else:
-            text_content = text_content + str(content)
+            content = str(content)
 
         if isImage:
-            pass
-            # user_msg_parts.append({"type": "image_url",
-            #                     "image_url":{"url": content}})
+            user_msg_parts.append({"type": "image_url",
+                                   "image_url": {"url": content}})
         else:
-            user_msg_parts["text"] = text_content
+            user_msg_parts.append({"type": "text", "text": content})
 
     return user_msg_parts
 
@@ -136,7 +133,7 @@ def load_settings():
     # Dummy Python function, actual loading is done in JS  
     pass  
 
-def save_settings(acc, sec, prompt, temp, tokens, model):  
+def save_settings(*args):
     # Dummy Python function, actual saving is done in JS  
     pass  
 
@@ -156,39 +153,49 @@ def bot(message, history, system_prompt, temperature, max_tokens, model):
                 print(f"bot history: {str(history)}")
 
             history_openai_format = []
-            user_msg_parts = ""
+            user_msg_parts = []
             if system_prompt:
-                    user_msg_parts = system_prompt + "\n"
-            for human, assi in history:
+                    user_msg_parts.append({"type": "text", "text": system_prompt + "\n"})
+            for entry in history:
+                if isinstance(entry, dict):
+                    human = entry.get("content") if entry.get("role") == "user" else None
+                    assi = entry.get("content") if entry.get("role") == "assistant" else None
+                else:
+                    human, assi = entry
                 if human is not None:
                     if type(human) is tuple:
-                        fc = encode_file(human[0])
-                        if fc["text"]:
-                            user_msg_parts = user_msg_parts + fc["text"]
+                        user_msg_parts.extend(encode_file(human[0]))
+                    elif isinstance(human, list):
+                        for part in human:
+                            if isinstance(part, dict) and part.get("path"):
+                                user_msg_parts.extend(encode_file(part["path"]))
+                            elif isinstance(part, dict) and part.get("text"):
+                                user_msg_parts.append({"type": "text", "text": part["text"]})
                     else:
-                        user_msg_parts = user_msg_parts + human
+                        user_msg_parts.append({"type": "text", "text": human})
 
                 if assi is not None:
                     if user_msg_parts:
                         history_openai_format.append({"role": "user", "content": user_msg_parts})
-                        user_msg_parts = ""
+                        user_msg_parts = []
 
                     history_openai_format.append({"role": "assistant", "content": assi})
 
             if message['text']:
-                user_msg_parts = user_msg_parts + message['text']
+                user_msg_parts.append({"type": "text", "text": message['text']})
             if message['files']:
                 for file in message['files']:
-                    fc = encode_file(file['path'])
-                    if fc["text"]:
-                        user_msg_parts = user_msg_parts + fc["text"]
+                    path = file.get('path') if isinstance(file, dict) else file
+                    if isinstance(file, dict) and isinstance(file.get('file'), dict):
+                        path = file['file'].get('path')
+                    user_msg_parts.extend(encode_file(path))
             history_openai_format.append({"role": "user", "content": user_msg_parts})
             user_msg_parts = []
 
             if log_to_console:
                 print(f"br_prompt: {str(history_openai_format)}")
 
-            url = "http://localhost:8000/v1/chat/completions"
+            url = f"{API_BASE_URL}/v1/chat/completions"
             headers = {"Content-Type": "application/json"}
             data = {
                 "model": model,
@@ -304,11 +311,15 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
         dl_settings_button.click(None, controls, js=generate_download_settings_js("oai_chat_settings.bin", control_ids))
         ul_settings_button.click(None, None, None, js=generate_upload_settings_js(control_ids))
 
-    chat = gr.ChatInterface(fn=bot, multimodal=True, additional_inputs=controls, retry_btn = None, autofocus = False)
-    chat.textbox.file_count = "multiple"
+    chat = gr.ChatInterface(
+        fn=bot,
+        multimodal=True,
+        additional_inputs=controls,
+        autofocus=False,
+        textbox=gr.MultimodalTextbox(file_count="multiple", max_lines=10),
+        chatbot=gr.Chatbot(buttons=["copy"], height=350),
+    )
     chatbot = chat.chatbot
-    chatbot.show_copy_button = True
-    chatbot.height = 350
 
     if dump_controls:
         with gr.Row():
@@ -319,7 +330,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
     with gr.Accordion("Import/Export", open = False):
         import_button = gr.UploadButton("History Import")
         export_button = gr.Button("History Export")
-        export_button.click(lambda: None, [chatbot, system_prompt], js="""
+        export_button.click(lambda *args: None, [chatbot, system_prompt], js="""
             (chat_history, system_prompt) => {
                 const export_data = {
                     history: chat_history,
@@ -338,7 +349,7 @@ with gr.Blocks(delete_cache=(86400, 86400)) as demo:
             }
             """)
         dl_button = gr.Button("File download")
-        dl_button.click(lambda: None, [chatbot], js="""
+        dl_button.click(lambda *args: None, [chatbot], js="""
             (chat_history) => {
                 // Attempt to extract content enclosed in backticks with an optional filename
                 const contentRegex = /```(\\S*\\.(\\S+))?\\n?([\\s\\S]*?)```/;
